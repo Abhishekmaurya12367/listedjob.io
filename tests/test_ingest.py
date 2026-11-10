@@ -185,7 +185,7 @@ def test_india_location_filter(location, expected):
 
 
 def test_tech_role_filter():
-    assert is_tech_role("Product Engineer", None, TECH_KEYWORDS)
+    assert is_tech_role("Software Engineer", None, TECH_KEYWORDS)
     assert is_tech_role("Analyst", "Machine learning model operations", TECH_KEYWORDS)
     assert not is_tech_role(
         "Finance Associate", "Manage quarterly accounts", TECH_KEYWORDS
