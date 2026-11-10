@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 import httpx
@@ -16,7 +16,7 @@ def fetch_jobs(
     *,
     max_retries: int = 3,
     backoff_seconds: float = 1.0,
-    sleep: Any,
+    sleep: Callable[[float], None],
 ) -> list[dict[str, Any]]:
     if source == "greenhouse":
         url = GREENHOUSE_URL.format(slug=quote(slug, safe=""))
@@ -28,8 +28,6 @@ def fetch_jobs(
     for attempt in range(max_retries + 1):
         try:
             response = client.get(url)
-            if response.status_code in RETRYABLE_STATUS_CODES:
-                response.raise_for_status()
             response.raise_for_status()
             payload = response.json()
             if source == "greenhouse" and not isinstance(payload, dict):
