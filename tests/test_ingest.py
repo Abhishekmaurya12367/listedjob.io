@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db.base import Base
 from app.ingest.fetchers import fetch_jobs
+from app.ingest.config import load_companies, load_tech_keywords
 from app.ingest.normalize import (
     is_india_location,
     is_tech_role,
@@ -15,7 +16,28 @@ from app.ingest.normalize import (
 from app.ingest.service import ingest_company
 from app.models import Job, JobStatus, JobType
 
-TECH_KEYWORDS = ["software", "engineer", "developer", "machine learning"]
+TECH_KEYWORDS = [
+    "software",
+    "software engineer",
+    "developer",
+    "machine learning",
+]
+
+
+def test_loads_company_slugs_and_tech_keywords(tmp_path):
+    companies_path = tmp_path / "companies.yaml"
+    companies_path.write_text(
+        "greenhouse:\n  - acme\nlever:\n  - example-inc\n",
+        encoding="utf-8",
+    )
+    keywords_path = tmp_path / "tech.yaml"
+    keywords_path.write_text("keywords:\n  - software\n", encoding="utf-8")
+
+    assert load_companies(companies_path) == {
+        "greenhouse": ["acme"],
+        "lever": ["example-inc"],
+    }
+    assert load_tech_keywords(keywords_path) == ["software"]
 
 
 @pytest.fixture
@@ -42,10 +64,15 @@ def test_greenhouse_fetch_and_normalize():
             }
         ]
     }
-    client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(200, json=payload, request=request)
+
+    def handler(request):
+        assert str(request.url) == (
+            "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true"
         )
+        return httpx.Response(200, json=payload, request=request)
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler)
     )
     try:
         jobs = fetch_jobs(client, "greenhouse", "acme", sleep=lambda _: None)
@@ -62,6 +89,22 @@ def test_greenhouse_fetch_and_normalize():
     assert "software-engineer-intern-acme-101" in normalized.slug
 
 
+@pytest.mark.parametrize("word", ["intern", "internship", "trainee", "fresher"])
+def test_internship_keywords(word):
+    normalized = normalize_job(
+        "greenhouse",
+        {
+            "id": word,
+            "title": f"Software Engineer {word}",
+            "location": {"name": "Bengaluru, India"},
+        },
+        "acme",
+        TECH_KEYWORDS,
+    )
+    assert normalized is not None
+    assert normalized.job_type is JobType.INTERNSHIP
+
+
 def test_lever_fetch_and_normalize():
     payload = [
         {
@@ -73,10 +116,13 @@ def test_lever_fetch_and_normalize():
             "createdAt": 1735787045000,
         }
     ]
+
+    def handler(request):
+        assert str(request.url) == "https://api.lever.co/v0/postings/acme?mode=json"
+        return httpx.Response(200, json=payload, request=request)
+
     client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(200, json=payload, request=request)
-        )
+        transport=httpx.MockTransport(handler)
     )
     try:
         jobs = fetch_jobs(client, "lever", "acme", sleep=lambda _: None)
@@ -92,6 +138,35 @@ def test_lever_fetch_and_normalize():
     assert normalized.apply_url == "https://example.test/jobs/lever-1"
     assert normalized.job_type is JobType.FULL_TIME
     assert normalized.posted_at == datetime(2025, 1, 2, 3, 4, 5, tzinfo=timezone.utc)
+
+
+def test_fetch_retries_transient_http_error():
+    calls = 0
+    delays = []
+
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(503, request=request)
+        return httpx.Response(200, json={"jobs": []}, request=request)
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    try:
+        jobs = fetch_jobs(
+            client,
+            "greenhouse",
+            "acme",
+            max_retries=2,
+            backoff_seconds=0.25,
+            sleep=delays.append,
+        )
+    finally:
+        client.close()
+
+    assert jobs == []
+    assert calls == 2
+    assert delays == [0.25]
 
 
 @pytest.mark.parametrize(
@@ -112,7 +187,9 @@ def test_india_location_filter(location, expected):
 def test_tech_role_filter():
     assert is_tech_role("Product Engineer", None, TECH_KEYWORDS)
     assert is_tech_role("Analyst", "Machine learning model operations", TECH_KEYWORDS)
-    assert not is_tech_role("Finance Associate", "Manage quarterly accounts", TECH_KEYWORDS)
+    assert not is_tech_role(
+        "Finance Associate", "Manage quarterly accounts", TECH_KEYWORDS
+    )
 
 
 def test_fetch_failure_does_not_expire_company_jobs(session_factory):
@@ -192,6 +269,13 @@ def test_success_expires_only_jobs_missing_from_source(session_factory):
                 "location": {"name": "New York, USA"},
                 "content": "Finance",
             },
+            {
+                "id": "new",
+                "title": "Software Engineer II",
+                "location": {"name": "Pune, India"},
+                "content": "<p>Build software.</p>",
+                "absolute_url": "https://example.test/new",
+            }
         ]
     }
     client = httpx.Client(
@@ -211,7 +295,13 @@ def test_success_expires_only_jobs_missing_from_source(session_factory):
     finally:
         client.close()
 
-    assert (stats.fetched, stats.kept, stats.expired) == (2, 1, 1)
+    assert (
+        stats.fetched,
+        stats.kept,
+        stats.inserted,
+        stats.updated,
+        stats.expired,
+    ) == (3, 2, 1, 1, 1)
     with session_factory() as session:
         jobs = {
             job.external_id: job.status
@@ -220,3 +310,4 @@ def test_success_expires_only_jobs_missing_from_source(session_factory):
     assert jobs["existing"] is JobStatus.ACTIVE
     assert jobs["excluded"] is JobStatus.ACTIVE
     assert jobs["stale"] is JobStatus.EXPIRED
+    assert jobs["new"] is JobStatus.ACTIVE

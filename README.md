@@ -1,8 +1,7 @@
-# listedjob.io backend (Task 1)
+# listedjob.io backend
 
-Minimal FastAPI, SQLAlchemy, and Alembic scaffold for the `jobs` table. Python
-3.11 is required. The initial migration creates the table and the unique
-`(source, external_id)` constraint.
+FastAPI, SQLAlchemy, and Alembic scaffold with Greenhouse and Lever job
+ingestion. Python 3.11 is required.
 
 ## Run PostgreSQL
 
@@ -25,19 +24,37 @@ alembic upgrade head
 The default database URL in `alembic.ini` matches the local Docker Compose
 database. Set `DATABASE_URL` to override it.
 
+## Configure and run ingestion
+
+Add company board slugs to the `greenhouse` and `lever` lists in
+`companies.yaml`. The default lists are empty. Adjust the editable role
+keywords in `tech_keywords.yaml`, then run:
+
+```powershell
+python -m app.ingest run
+```
+
+Ingestion logs fetched, kept, inserted, updated, and expired counts for each
+company. A company’s active jobs are expired only when its source fetch
+succeeds. Transient request failures are retried with exponential backoff; the
+runner pauses one second between companies.
+
 ## Verify
 
-Check the applied migration:
+Check the applied migration and inspect the jobs table and ingested rows:
 
 ```powershell
 alembic current
-```
-
-Confirm the table and unique constraint exist in PostgreSQL:
-
-```powershell
 docker compose exec db psql -U listedjob -d listedjob -c "\d jobs"
+docker compose exec db psql -U listedjob -d listedjob -c "SELECT source, company, title, status FROM jobs ORDER BY company, title LIMIT 20;"
 ```
 
 The table has PostgreSQL enum types for `job_type` (`internship`, `full-time`)
 and `status` (`active`, `expired`); new rows default to `active`.
+
+Run the mocked ingestion unit tests with:
+
+```powershell
+python -m pip install -e ".[dev]"
+python -m pytest
+```

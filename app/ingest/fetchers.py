@@ -32,6 +32,8 @@ def fetch_jobs(
                 response.raise_for_status()
             response.raise_for_status()
             payload = response.json()
+            if source == "greenhouse" and not isinstance(payload, dict):
+                raise ValueError(f"Unexpected Greenhouse jobs response for {slug}")
             jobs = payload.get("jobs") if source == "greenhouse" else payload
             if not isinstance(jobs, list) or any(
                 not isinstance(job, dict) for job in jobs

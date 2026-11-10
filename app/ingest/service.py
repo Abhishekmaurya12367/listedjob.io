@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.ingest.config import load_companies, load_tech_keywords
 from app.ingest.fetchers import fetch_jobs
-from app.ingest.normalize import NormalizedJob, normalize_job
+from app.ingest.normalize import NormalizedJob, company_name_from_slug, normalize_job
 from app.models import Job, JobStatus
 
 LOGGER = logging.getLogger("app.ingest")
@@ -39,7 +39,7 @@ def _upsert_jobs(
 ) -> tuple[int, int]:
     inserted = 0
     updated = 0
-    fields = tuple(NormalizedJob.__dataclass_fields__)[:-1]
+    fields = tuple(NormalizedJob.__dataclass_fields__)
 
     for job in jobs:
         values = job.as_model_values()
@@ -110,7 +110,7 @@ def ingest_company(
     normalized_jobs = list(normalized_by_id.values())
     stats.kept = len(normalized_jobs)
 
-    company_name = company_slug.replace("-", " ").title()
+    company_name = company_name_from_slug(company_slug)
     with session_factory() as session:
         with session.begin():
             stats.inserted, stats.updated = _upsert_jobs(
@@ -152,6 +152,8 @@ def run_ingestion(
     processed = 0
 
     try:
+        if company_count == 0:
+            logger.warning("No company slugs configured in companies.yaml")
         for source in ("greenhouse", "lever"):
             for company_slug in companies.get(source, []):
                 processed += 1

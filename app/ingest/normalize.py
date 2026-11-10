@@ -146,6 +146,10 @@ def _slug_part(value: str) -> str:
     return SLUG_PATTERN.sub("-", value.lower()).strip("-")
 
 
+def company_name_from_slug(company_slug: str) -> str:
+    return company_slug.replace("-", " ").title()
+
+
 def make_slug(title: str, company: str, external_id: str, source: str) -> str:
     components = [_slug_part(value) for value in (title, company, external_id)]
     base = "-".join(part for part in components if part) or "job"
@@ -176,7 +180,6 @@ def _job_fields(
         external_id = _field_value(raw, "id")
         apply_url = _field_value(raw, "absolute_url")
         posted_at = _parse_datetime(raw.get("first_published") or raw.get("updated_at"))
-        company = _field_value(raw, "company_name")
     elif source == "lever":
         categories = raw.get("categories")
         categories = categories if isinstance(categories, dict) else {}
@@ -186,14 +189,13 @@ def _job_fields(
         external_id = _field_value(raw, "id")
         apply_url = _field_value(raw, "applyUrl") or _field_value(raw, "hostedUrl")
         posted_at = _parse_datetime(raw.get("createdAt"))
-        company = _field_value(raw, "company")
     else:
         raise ValueError(f"Unsupported job source: {source}")
 
     if not external_id or not title:
         return None
 
-    company = company or company_slug.replace("-", " ").title()
+    company = company_name_from_slug(company_slug)
     location = location[:255] if location else None
     search_text = f"{title} {description or ''}"
     internship = bool(INTERNSHIP_PATTERN.search(search_text))

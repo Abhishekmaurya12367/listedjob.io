@@ -1,10 +1,9 @@
 keywords:
   - software
   - technology
-  - engineer
-  - engineering
+  - software engineer
+  - software engineering
   - developer
-  - development
   - programmer
   - programming
   - frontend
@@ -17,8 +16,10 @@ keywords:
   - sre
   - cloud
   - infrastructure
-  - platform
-  - data
+  - platform engineering
+  - data engineer
+  - data scientist
+  - data analyst
   - analytics
   - machine learning
   - artificial intelligence
@@ -33,6 +34,14 @@ keywords:
   - mobile
   - ios
   - android
-  - product manager
+  - technical product manager
   - technical support
   - systems administrator
+  - database administrator
+  - python
+  - java
+  - javascript
+  - typescript
+  - golang
+  - rust
+  - api
