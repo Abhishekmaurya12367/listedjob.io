@@ -1,7 +1,16 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, Enum as SqlEnum, Integer, String, Text, UniqueConstraint, text
+from sqlalchemy import (
+    DateTime,
+    Enum as SqlEnum,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -21,6 +30,10 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         UniqueConstraint("source", "external_id", name="uq_jobs_source_external_id"),
+        Index("ix_jobs_city", "city"),
+        Index("ix_jobs_job_type", "job_type"),
+        Index("ix_jobs_status", "status"),
+        Index("ix_jobs_posted_at", "posted_at"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
