@@ -9,6 +9,15 @@ ingestion and a read-only jobs API. Python 3.11 is required.
 docker compose up -d db
 ```
 
+If host port `5432` is already in use, select another host port (for example
+`5433`) and set the matching database URL in the same PowerShell session:
+
+```powershell
+$env:POSTGRES_PORT = "5433"
+$env:DATABASE_URL = "postgresql+psycopg://listedjob:listedjob@localhost:5433/listedjob"
+docker compose up -d db
+```
+
 ## Install, migrate, and run API
 
 From the project directory, create and activate a Python 3.11 virtual
@@ -22,8 +31,9 @@ alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-The default database URL in `alembic.ini` matches the local Docker Compose
-database. Set `DATABASE_URL` to override it.
+The default database URL in `alembic.ini` matches the default local Docker
+Compose port. Set `DATABASE_URL` to override it. Keep the port override above
+set in the same PowerShell window when applying migrations and starting the API.
 
 ## Read API
 

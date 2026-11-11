@@ -5,6 +5,7 @@
 - FastAPI, SQLAlchemy 2, PostgreSQL 16, Alembic
 - `httpx` fetches source job boards; PyYAML loads ingestion configuration
 - Docker Compose runs local PostgreSQL with persistent volume `postgres_data`
+- Compose host port defaults to `5432` and can be changed with `POSTGRES_PORT`
 - `DATABASE_URL` can override the local PostgreSQL connection URL
 
 ## Jobs table
