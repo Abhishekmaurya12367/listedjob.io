@@ -1,7 +1,7 @@
 # listedjob.io backend
 
 FastAPI, SQLAlchemy, and Alembic scaffold with Greenhouse and Lever job
-ingestion. Python 3.11 is required.
+ingestion and a read-only jobs API. Python 3.11 is required.
 
 ## Run PostgreSQL
 
@@ -9,7 +9,7 @@ ingestion. Python 3.11 is required.
 docker compose up -d db
 ```
 
-## Install and migrate
+## Install, migrate, and run API
 
 From the project directory, create and activate a Python 3.11 virtual
 environment, then install the project:
@@ -17,12 +17,38 @@ environment, then install the project:
 ```powershell
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 alembic upgrade head
+uvicorn app.main:app --reload
 ```
 
 The default database URL in `alembic.ini` matches the local Docker Compose
 database. Set `DATABASE_URL` to override it.
+
+## Read API
+
+- `GET /health` checks the database connection.
+- `GET /jobs` lists active jobs. Optional parameters: `q`, `city`, `job_type`,
+  `company`, `page`, `page_size` (maximum 50), and `sort` (`newest`, `oldest`,
+  `title_asc`, or `title_desc`). Search uses PostgreSQL full-text search.
+- `GET /jobs/{slug}` returns a job, `404` if missing, or `410` if expired.
+- `GET /companies` lists active job counts by company.
+- `GET /meta/filters` lists active city and job-type counts.
+
+Examples from another PowerShell window while Uvicorn is running:
+
+```powershell
+curl.exe http://localhost:8000/health
+curl.exe "http://localhost:8000/jobs?page=1&page_size=20&sort=newest"
+curl.exe "http://localhost:8000/jobs?q=software&city=Bengaluru&job_type=full-time"
+curl.exe http://localhost:8000/companies
+curl.exe http://localhost:8000/meta/filters
+curl.exe http://localhost:8000/jobs/software-engineer-example-123
+```
+
+The API list and aggregate endpoints include only active jobs. The search GIN
+index and filter/order indexes are created by the second Alembic migration;
+run `alembic upgrade head` after updating the code.
 
 ## Configure and run ingestion
 
@@ -52,9 +78,8 @@ docker compose exec db psql -U listedjob -d listedjob -c "SELECT source, company
 The table has PostgreSQL enum types for `job_type` (`internship`, `full-time`)
 and `status` (`active`, `expired`); new rows default to `active`.
 
-Run the mocked ingestion unit tests with:
+Run the API and mocked ingestion tests with:
 
 ```powershell
-python -m pip install -e ".[dev]"
 python -m pytest
 ```

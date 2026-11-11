@@ -19,6 +19,9 @@
 - `posted_at`, `valid_through`: optional timezone-aware timestamps
 - `status`: PostgreSQL enum `active`/`expired`, defaults to `active`
 - `slug`: required string (255)
+- Filter/order indexes cover `city`, `job_type`, `status`, and `posted_at`.
+- A PostgreSQL GIN index supports full-text search across title, company, and
+  description.
 
 ## Ingestion
 - Add Greenhouse and Lever board slugs to their lists in `companies.yaml`.
@@ -35,11 +38,22 @@
 - City matching uses a built-in list of common Indian cities.
 - Per-company logs report fetched, kept, inserted, updated, and expired counts.
 
+## Read API
+- Run with `uvicorn app.main:app --reload`.
+- `GET /health` checks database connectivity.
+- `GET /jobs` supports full-text `q`, city, job type, company, pagination, and
+  newest/oldest/title sorting; only active jobs are returned.
+- `GET /jobs/{slug}` returns job detail, `404` when missing, and `410` when
+  expired.
+- `GET /companies` and `GET /meta/filters` aggregate active jobs only.
+- Query validation errors use HTTP `422`; page size is limited to 50.
+
 ## Local run and verification
 1. Start PostgreSQL: `docker compose up -d db`
 2. Create and activate a Python 3.11 virtual environment.
 3. Install: `python -m pip install -e ".[dev]"`
 4. Apply migrations: `alembic upgrade head`
-5. Ingest configured jobs: `python -m app.ingest run`
-6. Inspect data: `docker compose exec db psql -U listedjob -d listedjob`
-7. Run tests: `python -m pytest`
+5. Start API: `uvicorn app.main:app --reload`
+6. Ingest configured jobs: `python -m app.ingest run`
+7. Inspect data: `docker compose exec db psql -U listedjob -d listedjob`
+8. Run tests: `python -m pytest`
