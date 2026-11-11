@@ -22,3 +22,4 @@ dev = ["pytest>=8.0,<10.0"]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
+hi
